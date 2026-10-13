@@ -1,11 +1,26 @@
+
 const mongoose = require("mongoose");
+
 const schema = new mongoose.Schema(
   {
-    // optional: accounts created with Google start without a phone until it is verified
-    phone: { type: String, trim: true },
+    // Optional for Google/email accounts until phone verification.
+    phone: {
+      type: String,
+      trim: true,
+    },
+
     name: String,
-    email: String,
-    googleId: { type: String },
+
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+
+    googleId: {
+      type: String,
+    },
+
     role: {
       type: String,
       enum: [
@@ -18,22 +33,46 @@ const schema = new mongoose.Schema(
       ],
       default: "customer",
     },
+
     status: {
       type: String,
       enum: ["pending", "approved", "rejected", "suspended"],
       default: "pending",
     },
+
     profileImage: String,
-    online: { type: Boolean, default: false },
+
+    online: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true, autoIndex: false },
+  { timestamps: true, autoIndex: false }
 );
 
-// unique only when a phone exists. Created by config/db.js (ensureUserIndexes).
+// Existing phone uniqueness policy.
 schema.index(
   { phone: 1 },
-  { unique: true, partialFilterExpression: { phone: { $type: "string" } } }
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $type: "string" },
+    },
+  }
 );
-schema.index({ googleId: 1 }, { unique: true, partialFilterExpression: { googleId: { $type: "string" } } });
+
+schema.index(
+  { googleId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      googleId: { $type: "string" },
+    },
+  }
+);
+
+// Kept non-unique to avoid breaking existing databases.
+// Check existing duplicate emails before adding a unique index.
 schema.index({ email: 1 });
+
 module.exports = mongoose.model("User", schema);
