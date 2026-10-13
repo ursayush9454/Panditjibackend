@@ -25,5 +25,7 @@ API base: `/api/partner` | Health: `GET /api/health`
 | Astrologer consultation (chat/audio/video) | `/consultation`, `/chat`, WebRTC sockets |
 | Wallet, earnings, commission | `/wallet`, `/earnings`, `/commission` |
 | Reviews, notifications, admin | `/reviews`, `/notifications`, `/admin` |
+| **E-store (puja material)** | `/store`, `/store/admin`, `/merchant` |
+| Login: Firebase OTP, Google | `/auth/firebase`, `/auth/google`, `/auth/phone/link` |
 
-See `REVIEW.md` for the full audit, what was fixed, and the API of the new modules.
+See `REVIEW.md` for the change log and `docs/STORE_API.md` for the e-store API.

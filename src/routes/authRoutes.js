@@ -15,6 +15,18 @@ r.post(
   rateLimit({ windowMs: 10 * 60 * 1000, max: 15, keyFn: phoneKey }),
   c.verifyOtp
 );
+r.post(
+  "/google",
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 20 }),
+  c.googleLogin
+);
+r.post("/google/link", auth, c.linkGoogle);
+r.post(
+  "/firebase",
+  rateLimit({ windowMs: 10 * 60 * 1000, max: 30 }),
+  c.firebaseLogin
+);
+r.post("/phone/link", auth, rateLimit({ windowMs: 10 * 60 * 1000, max: 10 }), c.linkPhone);
 r.get("/me", auth, c.getMe);
 
 module.exports = r;

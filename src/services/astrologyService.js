@@ -260,37 +260,22 @@ const getHoroscope = async ({
   period = "daily",
   date,
 }) => {
-  if (!NAVAMSHA_API_KEY) {
-    const error = new Error(
-      "NAVAMSHA_API_KEY is missing"
-    );
+  // Horoscopes are fetched by the daily job (or published by admin) and stored in MongoDB.
+  const Horoscope = require("../models/Horoscope");
 
-    error.status = 500;
+  const horoscope = await Horoscope.findOne({
+    zodiacSign: String(zodiacSign || "").toLowerCase(),
+    period,
+    date: date || new Date().toISOString().slice(0, 10),
+  }).lean();
 
+  if (!horoscope) {
+    const error = new Error("Horoscope has not been published for this date");
+    error.status = 404;
     throw error;
   }
 
-  /*
-    Exact horoscope provider endpoint
-    abhi configured nahi hai.
-
-    Isliye fake horoscope data generate
-    nahi kar rahe.
-  */
-
-  const error = new Error(
-    "Horoscope provider integration is not configured yet"
-  );
-
-  error.status = 501;
-
-  error.details = {
-    zodiacSign,
-    period,
-    date,
-  };
-
-  throw error;
+  return horoscope;
 };
 
 module.exports = {

@@ -1,6 +1,7 @@
 const router = require("express").Router();
 
 const auth = require("../middleware/auth");
+const requirePhone = require("../middleware/requirePhone");
 const role = require("../middleware/role");
 
 const instant = require("../controllers/instantController");
@@ -26,6 +27,7 @@ router.post(
   "/request",
   auth,
   role("customer"),
+  requirePhone,
   instant.createRequest
 );
 

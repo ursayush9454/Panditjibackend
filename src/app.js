@@ -274,20 +274,13 @@ app.use(
 );
 
 app.use(
-  "/api/partner/bookings",
-  require("./routes/bookingRoutes")
-);
-
-app.use(
   "/api/partner/kundli-matching",
   require("./routes/kundliMatchingRoutes")
 );
-const notificationRoutes = require("./routes/notificationRoutes");
-const deviceTokenRoutes = require("./routes/deviceTokenRoutes");
-
-// Add these alongside your existing API route mounts.
-app.use("/api/partner/notifications", notificationRoutes);
-app.use("/api/partner/device-tokens", deviceTokenRoutes);
+app.use(
+  "/api/partner/device-tokens",
+  require("./routes/deviceTokenRoutes")
+);
 
 
 // =====================================================
@@ -315,6 +308,20 @@ app.use(
 app.use(
   "/api/partner/daily-puja",
   require("./routes/dailyPujaRoutes")
+);
+
+// =====================================================
+// PUJA MATERIAL E-STORE (catalog, cart, checkout, orders)
+// =====================================================
+
+app.use(
+  "/api/partner/store/admin",
+  require("./routes/storeAdminRoutes")
+);
+
+app.use(
+  "/api/partner/store",
+  require("./routes/storeRoutes")
 );
 
 // =====================================================

@@ -6,12 +6,14 @@ const paymentSchema = new mongoose.Schema(
 
     purpose: {
       type: String,
-      enum: ["booking", "wallet_topup", "daily_puja", "mandali_advance"],
+      enum: ["booking", "wallet_topup", "daily_puja", "mandali_advance", "store_order"],
       required: true,
     },
 
     booking: { type: mongoose.Schema.Types.ObjectId, ref: "Booking", default: null, index: true },
     subscription: { type: mongoose.Schema.Types.ObjectId, ref: "DailyPujaSubscription", default: null },
+    // e-store: one payment can cover several merchant orders created in one checkout
+    orderGroup: { type: String, default: null, index: true, sparse: true },
 
     amount: { type: Number, required: true, min: 1 }, // INR
     currency: { type: String, default: "INR" },

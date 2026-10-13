@@ -173,5 +173,12 @@ exports.adminRefund = handle("adminRefund", async (req, res) => {
       }
     );
   }
+  if (payment.orderGroup) {
+    const Order = require("../models/Order");
+    await Order.updateMany(
+      { orderGroup: payment.orderGroup, paymentStatus: { $in: ["paid", "partially_refunded"] } },
+      { $set: { paymentStatus: payment.status === "refunded" ? "refunded" : "partially_refunded" } }
+    );
+  }
   res.json({ success: true, refundId: refund.id, payment });
 });

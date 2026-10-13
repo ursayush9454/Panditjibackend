@@ -402,6 +402,13 @@ exports.changePhone = async (req, res) => {
   try {
     const { phone } = req.body;
 
+    if (String(process.env.AUTH_OTP_MODE || "").toLowerCase() === "firebase") {
+      return res.status(400).json({
+        success: false,
+        message: "Phone numbers must be verified by OTP. Use POST /auth/phone/link.",
+      });
+    }
+
     if (!phone) {
       return res.status(400).json({
         success: false,

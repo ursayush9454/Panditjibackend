@@ -68,6 +68,14 @@ exports.register = async (req, res) => {
       });
     }
 
+    if (!user.phone) {
+      return res.status(400).json({
+        success: false,
+        needsPhone: true,
+        message: "Please verify your mobile number first (POST /auth/phone/link)",
+      });
+    }
+
     const vendor = await Vendor.create({
       user: userId,
       role,

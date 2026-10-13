@@ -2,6 +2,7 @@
 const mongoose = require("mongoose");
 
 const Review = require("../models/Review");
+const Booking = require("../models/Booking");
 const Vendor = require("../models/Vendor");
 const Consultation = require("../models/Consultation");
 
@@ -198,14 +199,6 @@ exports.createReview = async (req, res) => {
       });
     }
 
-    if (bookingId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Booking review verification is not configured in this controller yet. Use consultationId for now.",
-      });
-    }
-
     const vendor = await Vendor.findById(vendorId);
 
     if (!vendor) {
@@ -233,15 +226,36 @@ exports.createReview = async (req, res) => {
       }
     }
 
+    let verifiedBooking = null;
+
+    if (bookingId) {
+      verifiedBooking = await Booking.findOne({
+        _id: bookingId,
+        customer: customerId,
+        vendor: vendorId,
+        status: "completed",
+      });
+
+      if (!verifiedBooking) {
+        return res.status(400).json({
+          success: false,
+          message: "Completed booking not found for this customer and vendor",
+        });
+      }
+    }
+
     const duplicateFilter = {
       customer: customerId,
       vendor: vendorId,
     };
 
-    if (consultationId) {
+    if (bookingId) {
+      duplicateFilter.booking = bookingId;
+    } else if (consultationId) {
       duplicateFilter.consultation = consultationId;
     } else {
       duplicateFilter.consultation = null;
+      duplicateFilter.booking = null;
     }
 
     const existingReview = await Review.findOne(duplicateFilter);
@@ -308,20 +322,24 @@ exports.createReview = async (req, res) => {
 
     const selectedServiceType = allowedServiceTypes.includes(serviceType)
       ? serviceType
+      : allowedServiceTypes.includes(verifiedBooking?.serviceType)
+      ? verifiedBooking.serviceType
+      : bookingId
+      ? "booking"
       : "other";
 
     const review = await Review.create({
       vendor: vendorId,
       customer: customerId,
       consultation: consultationId || null,
-      booking: null,
+      booking: bookingId || null,
       rating: numericRating,
       title: String(title || "").trim().slice(0, 150),
       comment: String(comment || "").trim().slice(0, 2000),
       categoryRatings: cleanCategoryRatings,
       serviceType: selectedServiceType,
       status: "published",
-      isVerified: Boolean(verifiedConsultation),
+      isVerified: Boolean(verifiedConsultation || verifiedBooking),
     });
 
     const populatedReview = await Review.findById(review._id)

@@ -57,6 +57,11 @@ const markPaid = async ({ razorpayOrderId, razorpayPaymentId }) => {
     await activateSubscription(payment.subscription, payment._id);
   }
 
+  if (payment.purpose === "store_order" && payment.orderGroup) {
+    const { onPaymentSuccess } = require("./storeService");
+    await onPaymentSuccess(payment);
+  }
+
   return { payment, alreadyProcessed: false };
 };
 

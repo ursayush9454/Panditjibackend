@@ -584,6 +584,7 @@ const notifyUser = ({
   });
 
 module.exports = {
+  getFirebase,
   setNotificationIO,
   emitNotification,
   emitUnreadCount,

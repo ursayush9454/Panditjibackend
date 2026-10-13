@@ -4,6 +4,7 @@ const router = express.Router();
 
 const auth = require("../middleware/auth");
 const role = require("../middleware/role");
+const requirePhone = require("../middleware/requirePhone");
 
 const controller =
   require("../controllers/bookingController");
@@ -16,6 +17,7 @@ router.post(
   "/",
   auth,
   role("customer"),
+  requirePhone,
   controller.createBooking
 );
 

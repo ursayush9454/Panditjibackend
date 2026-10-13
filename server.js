@@ -18,6 +18,11 @@ const {
 } = require("./src/services/dailyPujaService");
 
 const {
+  startStoreSweeper,
+  stopStoreSweeper,
+} = require("./src/services/storeService");
+
+const {
   startDailyHoroscopeJob,
   stopDailyHoroscopeJob,
 } = require("./src/jobs/dailyHoroscopeJob");
@@ -96,6 +101,7 @@ const startServer = async () => {
     // Start background workers
     startDispatchSweeper();
     startDailyPujaScheduler();
+    startStoreSweeper();
 
     // Start automatic daily horoscope scheduler
     startDailyHoroscopeJob();
@@ -119,6 +125,7 @@ const startServer = async () => {
 
       // Stop background jobs
       stopDispatchSweeper();
+      stopStoreSweeper();
       stopDailyHoroscopeJob();
 
       // Close Socket.IO and HTTP server

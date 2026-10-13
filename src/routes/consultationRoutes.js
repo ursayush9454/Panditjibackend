@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 
 const auth = require("../middleware/auth");
+const requirePhone = require("../middleware/requirePhone");
 const role = require("../middleware/role");
 const controller = require("../controllers/consultationController");
 
@@ -14,6 +15,7 @@ router.post(
   "/",
   auth,
   role("customer"),
+  requirePhone,
   controller.createConsultation
 );
 
