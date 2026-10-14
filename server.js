@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const http = require("http");
@@ -16,6 +15,11 @@ const {
 const {
   startDailyPujaScheduler,
 } = require("./src/services/dailyPujaService");
+
+const {
+  startMandaliDispatchSweeper,
+  stopMandaliDispatchSweeper,
+} = require("./src/services/mandaliDispatchService");
 
 const {
   startStoreSweeper,
@@ -105,6 +109,7 @@ const startServer = async () => {
 
     // Start background workers
     startDispatchSweeper();
+    startMandaliDispatchSweeper();
     startDailyPujaScheduler();
     startStoreSweeper();
 
@@ -134,6 +139,7 @@ const startServer = async () => {
       // Stop background jobs
       stopDispatchSweeper();
       stopStoreSweeper();
+      stopMandaliDispatchSweeper();
       stopDailyHoroscopeJob();
       stopAstroChatSweeper();
 

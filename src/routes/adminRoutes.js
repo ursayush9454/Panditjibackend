@@ -5,6 +5,7 @@ const auth = require("../middleware/auth");
 const role = require("../middleware/role");
 
 const adminController = require("../controllers/adminController");
+const mandaliDispatchAdminController = require("../controllers/mandaliDispatchAdminController");
 
 // Dashboard
 router.get(
@@ -141,6 +142,21 @@ router.put(
   auth,
   role("admin"),
   adminController.updateInstantDispatchSettings
+);
+
+// Bhajan Mandli sequential-dispatch order (admin controlled)
+router.get(
+  "/mandali-dispatch-settings",
+  auth,
+  role("admin"),
+  mandaliDispatchAdminController.getSettings
+);
+
+router.put(
+  "/mandali-dispatch-settings",
+  auth,
+  role("admin"),
+  mandaliDispatchAdminController.updateSettings
 );
 
 // Enable/disable a Pandit for instant booking and change priority

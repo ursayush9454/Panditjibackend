@@ -1,4 +1,3 @@
-
 const mongoose = require("mongoose");
 
 const inquirySchema = new mongoose.Schema(
@@ -61,6 +60,14 @@ const inquirySchema = new mongoose.Schema(
     responseMessage: { type: String, trim: true, default: "" },
     quotedAmount: { type: Number, default: 0, min: 0 },
 
+    // Present for requests handled by the sequential 5 km Mandali dispatch queue.
+    dispatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MandaliDispatch",
+      default: null,
+      index: true,
+    },
+
     booking: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
@@ -81,5 +88,6 @@ const inquirySchema = new mongoose.Schema(
 
 inquirySchema.index({ mandali: 1, createdAt: -1 });
 inquirySchema.index({ customer: 1, createdAt: -1 });
+inquirySchema.index({ dispatchId: 1, status: 1 });
 
 module.exports = mongoose.model("Inquiry", inquirySchema);

@@ -1,6 +1,3 @@
-
-// src/models/Notification.js
-
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
@@ -29,6 +26,8 @@ const notificationSchema = new Schema(
         "booking_started",
         "booking_completed",
         "booking_no_show",
+        "mandali_booking_request",
+        "mandali_booking_update",
 
         // Instant Puja Booking
         "instant_puja_reminder",
@@ -140,6 +139,7 @@ const notificationSchema = new Schema(
       enum: [
         "",
         "Booking",
+        "Inquiry",
         "Conversation",
         "Message",
         "Consultation",
