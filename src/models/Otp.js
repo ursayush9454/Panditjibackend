@@ -8,6 +8,7 @@ const schema = new mongoose.Schema(
       index: true,
       sparse: true,
     },
+
     email: {
       type: String,
       lowercase: true,
@@ -15,14 +16,22 @@ const schema = new mongoose.Schema(
       index: true,
       sparse: true,
     },
+
+    purpose: {
+      type: String,
+      enum: ["email_verification", "password_reset"],
+    },
+
     otp: {
       type: String,
       required: true,
     },
+
     expiresAt: {
       type: Date,
       required: true,
     },
+
     attempts: {
       type: Number,
       default: 0,

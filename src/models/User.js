@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 
 const schema = new mongoose.Schema(
   {
-    // Optional for Google/email accounts until phone verification.
     phone: {
       type: String,
       trim: true,
@@ -15,6 +14,12 @@ const schema = new mongoose.Schema(
       type: String,
       trim: true,
       lowercase: true,
+    },
+
+    // Password ka bcrypt hash hi database mein save hoga.
+    passwordHash: {
+      type: String,
+      select: false,
     },
 
     googleId: {
@@ -50,7 +55,6 @@ const schema = new mongoose.Schema(
   { timestamps: true, autoIndex: false }
 );
 
-// Existing phone uniqueness policy.
 schema.index(
   { phone: 1 },
   {
@@ -71,8 +75,6 @@ schema.index(
   }
 );
 
-// Kept non-unique to avoid breaking existing databases.
-// Check existing duplicate emails before adding a unique index.
 schema.index({ email: 1 });
 
 module.exports = mongoose.model("User", schema);

@@ -14,7 +14,43 @@ const emailKey = (req) =>
     .toLowerCase()
     .slice(0, 100)}`;
 
-// Existing phone OTP endpoints.
+// Email + password login
+r.post(
+  "/login",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyFn: emailKey,
+    message: "Too many login attempts. Try again later.",
+  }),
+  c.login
+);
+
+// Forgot password
+r.post(
+  "/forgot-password",
+  rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 5,
+    keyFn: emailKey,
+    message: "Too many password-reset requests. Try again later.",
+  }),
+  c.forgotPassword
+);
+
+// Reset password using email OTP
+r.post(
+  "/reset-password",
+  rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 10,
+    keyFn: emailKey,
+    message: "Too many password-reset attempts. Try again later.",
+  }),
+  c.resetPassword
+);
+
+// Existing phone OTP routes
 r.post(
   "/send-otp",
   rateLimit({
@@ -36,7 +72,7 @@ r.post(
   c.verifyOtp
 );
 
-// Email OTP endpoints.
+// Existing email OTP signup
 r.post(
   "/email/send-otp",
   rateLimit({
@@ -58,7 +94,7 @@ r.post(
   c.verifyEmailOtp
 );
 
-// Google authentication.
+// Existing Google authentication
 r.post(
   "/google",
   rateLimit({
@@ -70,7 +106,7 @@ r.post(
 
 r.post("/google/link", auth, c.linkGoogle);
 
-// Firebase phone / Google authentication.
+// Existing Firebase authentication
 r.post(
   "/firebase",
   rateLimit({
