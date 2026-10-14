@@ -1,0 +1,34 @@
+node_modules/
+.env
+uploads/*
+!.gitkeep
+npm-debug.log*
+{
+  "project_info": {
+    "project_number": "604919844684",
+    "project_id": "myapp-fd6e1",
+    "storage_bucket": "myapp-fd6e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:604919844684:android:5e86f3b0581218ec8e49e9",
+        "android_client_info": {
+          "package_name": "com.deificdigital.paramparauser"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOmPDpeXiuvlLU4QVnYm5gpiYVMXs5LjQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
