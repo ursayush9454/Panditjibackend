@@ -15,6 +15,8 @@ const {
   offerNext,
   closeCurrentOffer,
   SEARCH_TIMEOUT_SEC,
+  DEFAULT_RADIUS_KM,
+  MIN_ADVANCE_HOURS,
   getDispatchSettings,
 } = require("../services/dispatchService");
 const { emitToUser } = require("../services/realtime");
@@ -57,9 +59,9 @@ const publicRequest = (
   delete o.endOtpAttempts;
 
   // Internal status stays "searching".
-  // Customer-facing status is "processing" until a Pandit accepts.
+  // Customer-facing status is "pending" until a Pandit accepts.
   if (customerView && o.status === "searching") {
-    o.status = "processing";
+    o.status = "pending";
   }
 
   if (showOtp && otp) o.startOtp = otp;
@@ -96,10 +98,12 @@ exports.nearbyPandits = handle("nearbyPandits", async (req, res) => {
     return fail(res, 400, "Valid latitude and longitude are required");
   }
 
+  await getDispatchSettings();
+
   const found = await findNearbyPandits({
     lat,
     lng,
-    radiusKm: Number(req.query.radiusKm) || 10,
+    radiusKm: DEFAULT_RADIUS_KM(),
     pujaId: req.query.pujaId || null,
     limit: 20,
   });
@@ -211,6 +215,20 @@ exports.createRequest = handle("createRequest", async (req, res) => {
     return fail(res, 400, "scheduledAt must be a future date/time");
   }
 
+  // No immediate bookings: puja must be at least N hours (admin, default 48h) away.
+  await getDispatchSettings();
+  const minAdvanceHours = MIN_ADVANCE_HOURS();
+  const earliest = new Date(Date.now() + minAdvanceHours * 3600000);
+
+  if (scheduledDate < earliest) {
+    return fail(
+      res,
+      400,
+      `Booking must be at least ${minAdvanceHours} hours in advance`,
+      { minAdvanceHours, earliestAllowedAt: earliest }
+    );
+  }
+
   if (!["cash", "wallet", "razorpay", "upi"].includes(paymentMethod)) {
     return fail(res, 400, "Invalid payment method");
   }
@@ -230,6 +248,7 @@ exports.createRequest = handle("createRequest", async (req, res) => {
     lat,
     lng,
     pujaId,
+    scheduledAt: scheduledDate,
     limit: 1,
   });
 
@@ -254,8 +273,6 @@ exports.createRequest = handle("createRequest", async (req, res) => {
     }
   }
 
-  const dispatchSettings = await getDispatchSettings();
-
   const request = await InstantRequest.create({
     customer: req.user._id,
     puja: puja._id,
@@ -272,11 +289,7 @@ exports.createRequest = handle("createRequest", async (req, res) => {
     notes,
     paymentMethod,
     fare: breakdown,
-    radiusKm: Number(
-      dispatchSettings.defaultRadiusKm ||
-        process.env.INSTANT_RADIUS_KM ||
-        10
-    ),
+    radiusKm: DEFAULT_RADIUS_KM(),
     searchExpiresAt: new Date(
       Date.now() + SEARCH_TIMEOUT_SEC() * 1000
     ),
@@ -288,7 +301,7 @@ exports.createRequest = handle("createRequest", async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: "Booking is processing while we find a Pandit",
+    message: "Booking is pending while we find a Pandit",
     request: publicRequest(fresh, { customerView: true }),
   });
 });
@@ -550,11 +563,15 @@ exports.applyLocation = async (
     }
   );
 
-  if (vendor.activeInstantRequest) {
+  {
+    // Track only the job that is about to happen (within 3h) or already running.
     const request = await InstantRequest.findOne({
-      _id: vendor.activeInstantRequest,
+      assignedVendor: vendor._id,
       status: { $in: ["accepted", "arrived", "in_progress"] },
-    }).select("customer pickup status");
+      scheduledAt: { $lte: new Date(Date.now() + 3 * 3600000) },
+    })
+      .sort({ scheduledAt: 1 })
+      .select("customer pickup status");
 
     if (request) {
       const [pLng, pLat] = request.pickup.coordinates;
@@ -576,6 +593,37 @@ exports.applyLocation = async (
 
   return { ok: true };
 };
+exports.getMyJobs = handle("getMyJobs", async (req, res) => {
+  const vendor = await getPandit(req.user._id);
+
+  if (!vendor) {
+    return fail(res, 403, "Approved pandit profile required");
+  }
+
+  const status = String(req.query.status || "upcoming");
+  const filter = { assignedVendor: vendor._id };
+
+  if (status === "upcoming") {
+    filter.status = { $in: ["accepted", "arrived", "in_progress"] };
+  } else if (status === "completed") {
+    filter.status = "completed";
+  } else {
+    filter.status = {
+      $in: ["accepted", "arrived", "in_progress", "completed", "cancelled"],
+    };
+  }
+
+  const jobs = await InstantRequest.find(filter)
+    .sort({ scheduledAt: status === "completed" ? -1 : 1 })
+    .limit(100);
+
+  res.json({
+    success: true,
+    count: jobs.length,
+    jobs: jobs.map((j) => publicRequest(j)),
+  });
+});
+
 exports.getOffer = handle("getOffer", async (req, res) => {
   const vendor = await getPandit(req.user._id);
 
@@ -644,6 +692,18 @@ exports.declineRequest = handle("declineRequest", async (req, res) => {
   });
 });
 
+const findClash = async (vendorId, request) => {
+  const t = new Date(request.scheduledAt).getTime();
+  const buf = Number(process.env.JOB_BUFFER_MINUTES || 180) * 60000;
+
+  return InstantRequest.findOne({
+    _id: { $ne: request._id },
+    assignedVendor: vendorId,
+    status: { $in: ["accepted", "arrived", "in_progress"] },
+    scheduledAt: { $gte: new Date(t - buf), $lte: new Date(t + buf) },
+  }).select("_id");
+};
+
 exports.acceptRequest = handle("acceptRequest", async (req, res) => {
   const vendor = await getPandit(req.user._id);
 
@@ -681,20 +741,11 @@ exports.acceptRequest = handle("acceptRequest", async (req, res) => {
     return fail(res, 409, "This request is no longer available");
   }
 
-  // A Pandit can only hold one active instant job.
-  const locked = await Vendor.findOneAndUpdate(
-    {
-      _id: vendor._id,
-      activeInstantRequest: null,
-    },
-    {
-      $set: {
-        activeInstantRequest: request._id,
-      },
-    }
-  );
+  // A Pandit cannot hold two jobs around the same time
+  // (scheduled jobs no longer lock the Pandit for days).
+  const clash = await findClash(vendor._id, request);
 
-  if (!locked) {
+  if (clash) {
     await InstantRequest.updateOne(
       { _id: request._id },
       {
@@ -705,14 +756,12 @@ exports.acceptRequest = handle("acceptRequest", async (req, res) => {
           "candidates.$[c].response": "declined",
         },
       },
-      {
-        arrayFilters: [{ "c.vendor": vendor._id }],
-      }
+      { arrayFilters: [{ "c.vendor": vendor._id }] }
     );
 
     await offerNext(request._id);
 
-    return fail(res, 409, "You already have an active job");
+    return fail(res, 409, "You already have another puja around this time");
   }
 
   let booking;
@@ -783,8 +832,9 @@ exports.acceptRequest = handle("acceptRequest", async (req, res) => {
       source: "app",
 
       serviceOtp: startOtp,
+      // Valid until 12h after the scheduled puja time (not 6h from booking time)
       serviceOtpExpiresAt: new Date(
-        Date.now() + 6 * 60 * 60 * 1000
+        scheduledDate.getTime() + 12 * 60 * 60 * 1000
       ),
 
       metadata: {
@@ -794,11 +844,6 @@ exports.acceptRequest = handle("acceptRequest", async (req, res) => {
     });
   } catch (error) {
     console.error("Instant booking create failed:", error);
-
-    await Vendor.updateOne(
-      { _id: vendor._id },
-      { $set: { activeInstantRequest: null } }
-    );
 
     await InstantRequest.updateOne(
       { _id: request._id },
@@ -842,8 +887,8 @@ exports.acceptRequest = handle("acceptRequest", async (req, res) => {
       title: "Booking confirmed",
       message:
         `${vendor.name} accepted your puja booking. ` +
-        "Your booking is now confirmed. Share the start OTP only when " +
-        `the Pandit arrives. OTP: ${startOtp}`,
+        "Your booking is now confirmed. You will find the start OTP in the app; " +
+        "share it with the Pandit only when he arrives.",
       type: "booking_accepted",
       priority: "high",
       referenceId: request._id,
@@ -898,6 +943,19 @@ exports.markArrived = handle("markArrived", async (req, res) => {
 
   const { vendor, request } = ctx;
 
+  const earlyHours = Number(process.env.ARRIVAL_EARLIEST_HOURS || 3);
+  const earliestArrival = new Date(
+    request.scheduledAt.getTime() - earlyHours * 3600000
+  );
+
+  if (new Date() < earliestArrival) {
+    return fail(
+      res,
+      400,
+      `You can mark arrival only within ${earlyHours} hours of the puja time`
+    );
+  }
+
   const maxMeters = Number(
     process.env.ARRIVAL_RADIUS_METERS || 500
   );
@@ -928,6 +986,12 @@ exports.markArrived = handle("markArrived", async (req, res) => {
   request.arrivedAt = new Date();
 
   await request.save();
+
+  // Pandit is busy with this job from now on (no new offers while on site)
+  await Vendor.updateOne(
+    { _id: vendor._id },
+    { $set: { activeInstantRequest: request._id } }
+  );
   broadcast(request);
 
   try {
@@ -1276,7 +1340,7 @@ exports.panditCancel = handle("panditCancel", async (req, res) => {
 
   emitToUser(request.customer, "instant:update", {
     requestId: request._id,
-    status: "processing",
+    status: "pending",
     message: "Your Pandit cancelled. Finding another Pandit...",
   });
 

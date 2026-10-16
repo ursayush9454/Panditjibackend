@@ -62,6 +62,13 @@ router.put(
 );
 
 router.get(
+  "/pandit/jobs",
+  auth,
+  role("pandit"),
+  instant.getMyJobs
+);
+
+router.get(
   "/pandit/offer",
   auth,
   role("pandit"),

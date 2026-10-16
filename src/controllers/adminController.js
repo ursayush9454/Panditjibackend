@@ -1455,6 +1455,9 @@ exports.updateInstantDispatchSettings = async (req, res) => {
       "offerTimeoutSeconds",
       "searchTimeoutSeconds",
       "defaultRadiusKm",
+      "minAdvanceHours",
+      "reminderStartHours",
+      "reminderIntervalMinutes",
       "premiumFirst",
     ];
 
@@ -1477,6 +1480,9 @@ exports.updateInstantDispatchSettings = async (req, res) => {
       "offerTimeoutSeconds",
       "searchTimeoutSeconds",
       "defaultRadiusKm",
+      "minAdvanceHours",
+      "reminderStartHours",
+      "reminderIntervalMinutes",
     ];
 
     for (const field of numericFields) {

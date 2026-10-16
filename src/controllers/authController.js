@@ -12,6 +12,11 @@ const {
 } = require("../services/emailService");
 
 const {
+  hashPasswordResetOtp,
+  issuePasswordResetOtp,
+} = require("../services/passwordResetService");
+
+const {
   verifyFirebaseIdToken,
   phoneCandidates,
   canonicalPhone,
@@ -47,17 +52,6 @@ const hashEmailOtp = (email, otp) => {
   return crypto
     .createHmac("sha256", process.env.JWT_SECRET)
     .update(`email:${email}:${otp}`)
-    .digest("hex");
-};
-
-const hashPasswordResetOtp = (email, otp) => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is not configured");
-  }
-
-  return crypto
-    .createHmac("sha256", process.env.JWT_SECRET)
-    .update(`password-reset:${email}:${otp}`)
     .digest("hex");
 };
 
@@ -301,11 +295,10 @@ exports.login = async (req, res) => {
       email: emailRegex(email),
     }).select("+passwordHash");
 
-    if (!user || !user.passwordHash) {
+    if (!user) {
       return res.status(401).json({
         success: false,
-        message:
-          "Invalid email or password. If you have not set a password, use Forgot Password.",
+        message: "Invalid email or password",
       });
     }
 
@@ -313,6 +306,38 @@ exports.login = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Your account is suspended",
+      });
+    }
+
+    // Old account that never set a password: send a one-time reset code
+    // and ask the app to open the Reset Password screen.
+    if (!user.passwordHash) {
+      let codeSent = false;
+
+      if (
+        process.env.LEGACY_AUTO_RESET !== "false" &&
+        emailConfigured() &&
+        process.env.JWT_SECRET
+      ) {
+        try {
+          const result = await issuePasswordResetOtp(email, {
+            kind: "legacy",
+          });
+          codeSent = result.sent || result.reason === "cooldown";
+        } catch (error) {
+          console.error("[Legacy Reset]", error.message);
+        }
+      }
+
+      return res.status(403).json({
+        success: false,
+        code: "PASSWORD_RESET_REQUIRED",
+        requiresPasswordReset: true,
+        codeSent,
+        email,
+        message: codeSent
+          ? "Please set your password. We have emailed you a code."
+          : "Please set your password using Forgot Password.",
       });
     }
 
@@ -380,67 +405,7 @@ exports.forgotPassword = async (req, res) => {
       return res.json(genericResponse);
     }
 
-    const existing = await Otp.findOne({
-      email,
-      purpose: "password_reset",
-    });
-
-    const now = Date.now();
-
-    if (
-      existing?.updatedAt &&
-      now - existing.updatedAt.getTime() < RESEND_COOLDOWN_MS
-    ) {
-      return res.json(genericResponse);
-    }
-
-    const otp = String(crypto.randomInt(100000, 1000000));
-
-    const expiresMinutes = Math.max(
-      1,
-      Number(process.env.OTP_EXPIRES_MINUTES || 5)
-    );
-
-    const expiresAt = new Date(now + expiresMinutes * 60 * 1000);
-
-    await sendMail({
-      to: email,
-      subject: "Reset your Vaidic Sanskar password",
-      text:
-        `Your Vaidic Sanskar password-reset code is ${otp}.\n\n` +
-        `This code expires in ${expiresMinutes} minutes.\n` +
-        "If you did not request a password reset, you can ignore this email.",
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px">
-          <h2>Vaidic Sanskar</h2>
-          <p>Use this code to reset your password:</p>
-          <div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:16px 0">
-            ${otp}
-          </div>
-          <p>This code expires in ${expiresMinutes} minutes.</p>
-          <p>If you did not request a password reset, ignore this email.</p>
-        </div>
-      `,
-    });
-
-    await Otp.findOneAndUpdate(
-      { email, purpose: "password_reset" },
-      {
-        $set: {
-          email,
-          purpose: "password_reset",
-          otp: hashPasswordResetOtp(email, otp),
-          expiresAt,
-          attempts: 0,
-        },
-        $unset: { phone: 1 },
-      },
-      {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-      }
-    );
+    await issuePasswordResetOtp(email, { kind: "forgot" });
 
     return res.json(genericResponse);
   } catch (error) {

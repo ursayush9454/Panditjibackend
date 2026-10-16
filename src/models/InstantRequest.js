@@ -89,6 +89,17 @@ const instantRequestSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Repeating reminders: first one 2h before, then every N minutes
+    lastReminderAt: {
+      type: Date,
+      default: null,
+    },
+
+    reminderCount: {
+      type: Number,
+      default: 0,
+    },
+
     pickup: {
       type: pointSchema,
       required: true,
@@ -149,7 +160,7 @@ const instantRequestSchema = new mongoose.Schema(
 
     radiusKm: {
       type: Number,
-      default: 10,
+      default: 5,
       min: 1,
       max: 100,
     },
@@ -264,6 +275,7 @@ const instantRequestSchema = new mongoose.Schema(
 instantRequestSchema.index({ pickup: "2dsphere" });
 instantRequestSchema.index({ status: 1, offerExpiresAt: 1 });
 instantRequestSchema.index({ currentOfferVendor: 1, status: 1 });
-instantRequestSchema.index({ status: 1, scheduledAt: 1, arrivalReminderSentAt: 1 });
+instantRequestSchema.index({ status: 1, scheduledAt: 1, lastReminderAt: 1 });
+instantRequestSchema.index({ assignedVendor: 1, status: 1, scheduledAt: 1 });
 
 module.exports = mongoose.model("InstantRequest", instantRequestSchema);

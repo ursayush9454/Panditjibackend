@@ -44,6 +44,10 @@ const getTransporter = () => {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      // Do not hang a request for minutes if the SMTP host is unreachable
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
     });
   }
 
@@ -58,83 +62,23 @@ const escapeHtml = (value = "") =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const sendMail = async ({ to, subject, text, html }) => {
-  if (
-    !to ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to))
-  ) {
-    return {
-      sent: false,
-      skipped: true,
-      reason: "invalid_recipient",
-    };
-  }
+const defaultHtml = (text) =>
+  `<pre style="font-family:Arial,sans-serif">${escapeHtml(text || "")}</pre>`;
 
-  if (!isConfigured()) {
-    return {
-      sent: false,
-      skipped: true,
-      reason: "email_not_configured",
-    };
-  }
-
-  if (smtpConfigured()) {
-    try {
-      const info = await getTransporter().sendMail({
-        from: {
-          name:
-            process.env.SMTP_FROM_NAME ||
-            process.env.BREVO_SENDER_NAME ||
-            "Vaidic Sanskar",
-          address:
-            process.env.SMTP_FROM_EMAIL ||
-            process.env.SMTP_USER,
-        },
-        to: String(to).trim(),
-        subject,
-        text: text || "",
-        html:
-          html ||
-          `<pre style="font-family:Arial,sans-serif">${escapeHtml(
-            text || ""
-          )}</pre>`,
-      });
-
-      console.log(
-        "[Email] SMTP accepted message:",
-        info.messageId || "sent"
-      );
-
-      return {
-        sent: true,
-        messageId: info.messageId || null,
-      };
-    } catch (error) {
-      console.error("[Email] SMTP send failed:", error.message);
-
-      if (!brevoConfigured()) {
-        throw new Error(`SMTP email failed: ${error.message}`);
-      }
-    }
-  }
-
+// Primary provider: Brevo (transactional email API)
+const sendViaBrevo = async ({ to, subject, text, html }) => {
   try {
     const response = await axios.post(
       "https://api.brevo.com/v3/smtp/email",
       {
         sender: {
           email: process.env.BREVO_SENDER_EMAIL.trim(),
-          name:
-            process.env.BREVO_SENDER_NAME || "Vaidic Sanskar",
+          name: process.env.BREVO_SENDER_NAME || "Vaidic Sanskar",
         },
         to: [{ email: String(to).trim() }],
         subject,
         textContent: text || "",
-        htmlContent:
-          html ||
-          `<pre style="font-family:Arial,sans-serif">${escapeHtml(
-            text || ""
-          )}</pre>`,
+        htmlContent: html || defaultHtml(text),
       },
       {
         headers: {
@@ -146,14 +90,12 @@ const sendMail = async ({ to, subject, text, html }) => {
       }
     );
 
-    console.log(
-      "[Email] Brevo accepted message:",
-      response.data.messageId
-    );
+    console.log("[Email] Brevo accepted message:", response.data.messageId);
 
     return {
       sent: true,
-      messageId: response.data.messageId,
+      provider: "brevo",
+      messageId: response.data.messageId || null,
     };
   } catch (error) {
     const details =
@@ -165,6 +107,76 @@ const sendMail = async ({ to, subject, text, html }) => {
 
     throw new Error(`Brevo email failed: ${details}`);
   }
+};
+
+// Fallback provider: SMTP (nodemailer)
+const sendViaSmtp = async ({ to, subject, text, html }) => {
+  try {
+    const info = await getTransporter().sendMail({
+      from: {
+        name:
+          process.env.SMTP_FROM_NAME ||
+          process.env.BREVO_SENDER_NAME ||
+          "Vaidic Sanskar",
+        address:
+          process.env.SMTP_FROM_EMAIL ||
+          process.env.SMTP_FROM ||
+          process.env.SMTP_USER,
+      },
+      to: String(to).trim(),
+      subject,
+      text: text || "",
+      html: html || defaultHtml(text),
+    });
+
+    console.log("[Email] SMTP accepted message:", info.messageId || "sent");
+
+    return {
+      sent: true,
+      provider: "smtp",
+      messageId: info.messageId || null,
+    };
+  } catch (error) {
+    console.error("[Email] SMTP send failed:", error.message);
+
+    throw new Error(`SMTP email failed: ${error.message}`);
+  }
+};
+
+/**
+ * Brevo first, SMTP as fallback.
+ * If only one provider is configured, only that one is used.
+ */
+const sendMail = async ({ to, subject, text, html }) => {
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to))) {
+    return { sent: false, skipped: true, reason: "invalid_recipient" };
+  }
+
+  if (!isConfigured()) {
+    return { sent: false, skipped: true, reason: "email_not_configured" };
+  }
+
+  const payload = { to, subject, text, html };
+
+  if (brevoConfigured()) {
+    try {
+      return await sendViaBrevo(payload);
+    } catch (brevoError) {
+      if (!smtpConfigured()) throw brevoError;
+
+      console.warn("[Email] Falling back to SMTP after Brevo failure");
+
+      try {
+        return { ...(await sendViaSmtp(payload)), fallback: true };
+      } catch (smtpError) {
+        throw new Error(
+          `${brevoError.message}; ${smtpError.message}`
+        );
+      }
+    }
+  }
+
+  return sendViaSmtp(payload);
 };
 
 module.exports = {
